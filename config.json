@@ -1,0 +1,28 @@
+{
+    "processing": {
+        "min_duration_seconds": 60,
+        "max_duration_seconds": 180,
+        "scene_detection_threshold": 0.3,
+        "silence_threshold_db": -30,
+        "silence_duration_seconds": 1.0
+    },
+    "subtitles": {
+        "enabled": true,
+        "whisper_model": "base",
+        "font_name": "Arial",
+        "font_size": 24,
+        "font_color": "&Hffffff",
+        "background_color": "&H80000000",
+        "language": "auto"
+    },
+    "output": {
+        "video_codec": "copy",
+        "audio_codec": "copy",
+        "organize_by_source": true,
+        "include_duration_in_filename": true
+    },
+    "supported_formats": [
+        ".mp4", ".avi", ".mkv", ".mov", 
+        ".wmv", ".flv", ".webm", ".m4v"
+    ]
+}
