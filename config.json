@@ -12,14 +12,23 @@
         "font_name": "Arial",
         "font_size": 24,
         "font_color": "&Hffffff",
-        "background_color": "&H80000000",
-        "language": "auto"
+        "outline_color": "&H000000",
+        "outline_width": 1,
+        "background_enabled": false,
+        "language": "auto",
+        "force_style": "FontName=Arial,FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=1"
     },
     "output": {
         "video_codec": "copy",
         "audio_codec": "copy",
         "organize_by_source": true,
-        "include_duration_in_filename": true
+        "include_duration_in_filename": true,
+        "subtitle_burn_in": true,
+        "create_mobile_version": true,
+        "mobile_resolution": {
+            "width": 1080,
+            "height": 1920
+        }
     },
     "supported_formats": [
         ".mp4", ".avi", ".mkv", ".mov", 

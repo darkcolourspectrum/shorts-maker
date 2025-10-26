@@ -11,8 +11,6 @@ from pathlib import Path
 from typing import List, Tuple
 import numpy as np
 
-import numpy as np
-
 # Используем рабочий импорт
 from moviepy import VideoFileClip
 print("✅ moviepy импортирован успешно")
@@ -47,14 +45,15 @@ class VideoShortsProcessor:
         print(f"📁 Папка для шортсов: {self.output_folder}")
         
         # Загружаем модель Whisper для субтитров
-        print("🤖 Загружаем модель Whisper для субтитров...")
-        try:
-            self.whisper_model = whisper.load_model("base")
-            print("✅ Модель Whisper загружена")
-        except Exception as e:
-            print(f"⚠️ Ошибка загрузки Whisper: {e}")
-            print("📝 Субтитры будут отключены")
-            self.whisper_model = None
+        print("🤖 Модель Whisper отключена для быстрого тестирования...")
+        self.whisper_model = None  # ВРЕМЕННО ОТКЛЮЧЕНО
+        # try:
+        #     self.whisper_model = whisper.load_model("base")
+        #     print("✅ Модель Whisper загружена")
+        # except Exception as e:
+        #     print(f"⚠️ Ошибка загрузки Whisper: {e}")
+        #     print("📝 Субтитры будут отключены")
+        #     self.whisper_model = None
         
         # Поддерживаемые форматы видео
         self.video_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v'}
@@ -245,102 +244,255 @@ class VideoShortsProcessor:
         millisecs = int((seconds % 1) * 1000)
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millisecs:03d}"
     
+    def convert_to_mobile_format(self, input_path: Path, output_path: Path):
+        """Конвертирует видео в мобильный формат 9:16 с размытым фоном"""
+        try:
+            # Получаем информацию о видео
+            with VideoFileClip(str(input_path)) as clip:
+                original_width = clip.w
+                original_height = clip.h
+                original_ratio = original_width / original_height
+            
+            print(f"    📱 Конвертируем в мобильный формат...")
+            print(f"    📏 Исходное разрешение: {original_width}x{original_height} ({original_ratio:.2f}:1)")
+            
+            # Целевое разрешение для мобильного (9:16)
+            target_width = 1080
+            target_height = 1920
+            
+            # СТРАТЕГИЯ: Основное видео по центру + размытый фон
+            # 1. Масштабируем основное видео чуть больше чем по ширине для лучшей видимости
+            main_scale_width = int(target_width * 1.2)  # Увеличиваем на 20% = 1296px вместо 1080px
+            main_scale_height = int(original_height * (main_scale_width / original_width))
+            
+            # 2. Позиция основного видео по центру экрана
+            main_x = (target_width - main_scale_width) // 2  # Будет отрицательное - это нормально
+            main_y = (target_height - main_scale_height) // 2
+            
+            # 3. Для фона: увеличиваем и размываем исходное видео
+            # Масштабируем фон чтобы заполнил всю высоту (будет шире чем нужно, но нам так и надо)
+            bg_scale_height = target_height
+            bg_scale_width = int(original_width * (target_height / original_height))
+            
+            # Центрируем фон по горизонтали
+            bg_x = (target_width - bg_scale_width) // 2
+            
+            print(f"    🎯 Основное видео: {main_scale_width}x{main_scale_height} в позиции ({main_x}, {main_y})")
+            print(f"    🌫️ Размытый фон: {bg_scale_width}x{bg_scale_height} в позиции ({bg_x}, 0)")
+            
+            # Создаем сложный фильтр:
+            # [0:v] - исходное видео
+            # Делаем фон: масштабируем на всю высоту, размываем, центрируем
+            # Делаем основное: масштабируем больше чем экран для лучшей видимости, накладываем поверх фона
+            filter_str = (
+                f"[0:v]scale={bg_scale_width}:{bg_scale_height},boxblur=15:3,crop={target_width}:{target_height}:{abs(bg_x) if bg_x < 0 else 0}:0[bg];"
+                f"[0:v]scale={main_scale_width}:{main_scale_height}[main];"
+                f"[bg][main]overlay={main_x}:{main_y}"
+            )
+            
+            print(f"    🔧 Применяем фильтр размытого фона...")
+            
+            # Выполняем конвертацию
+            cmd = [
+                'ffmpeg',
+                '-i', str(input_path.absolute()),
+                '-filter_complex', filter_str,
+                '-c:a', 'copy',
+                '-y',
+                str(output_path.absolute())
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"    ✅ Мобильная версия создана с размытым фоном!")
+                return True
+            else:
+                print(f"    ❌ Ошибка конвертации в мобильный формат:")
+                if result.stderr:
+                    error_lines = result.stderr.strip().split('\n')[-2:]
+                    for line in error_lines:
+                        if line.strip():
+                            print(f"    ⚠️ {line}")
+                return False
+                
+        except Exception as e:
+            print(f"    ❌ Ошибка при конвертации в мобильный формат: {e}")
+            return False
+
+    def add_subtitles_with_drawtext(self, video_path: Path, srt_content: str, output_path: Path):
+        """Альтернативный способ - используем drawtext для каждой строки субтитров"""
+        try:
+            # Парсим SRT контент
+            subtitle_entries = self.parse_srt_content(srt_content)
+            
+            if not subtitle_entries:
+                print("    ⚠️ Не удалось распарсить субтитры для drawtext")
+                return False
+            
+            print(f"    🎯 Используем drawtext для {len(subtitle_entries)} фрагментов субтитров")
+            
+            # Создаем фильтр drawtext для каждого субтитра
+            drawtext_filters = []
+            for entry in subtitle_entries:
+                start_sec = entry['start']
+                end_sec = entry['end'] 
+                text = entry['text'].replace("'", "\\'").replace(":", "\\:")
+                
+                # Создаем фильтр для этого времени - ОПТИМАЛЬНЫЙ РАЗМЕР
+                filter_str = f"drawtext=fontfile=C\\\\:/Windows/Fonts/arial.ttf:text='{text}':fontcolor=white:fontsize=28:box=1:boxcolor=black@0.7:boxborderw=6:x=(w-text_w)/2:y=h-th-30:enable='between(t,{start_sec},{end_sec})'"
+                drawtext_filters.append(filter_str)
+            
+            # Объединяем все фильтры
+            combined_filter = ','.join(drawtext_filters)
+            
+            # Выполняем команду
+            video_path_str = str(video_path.absolute())
+            output_path_str = str(output_path.absolute())
+            
+            cmd = [
+                'ffmpeg',
+                '-i', video_path_str,
+                '-vf', combined_filter,
+                '-c:a', 'copy',
+                '-y',
+                output_path_str
+            ]
+            
+            print(f"    🔧 Способ 2: Используем drawtext...")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"    ✅ Субтитры встроены через drawtext!")
+                return True
+            else:
+                print(f"    ❌ Drawtext тоже не сработал")
+                return False
+                
+        except Exception as e:
+            print(f"    ❌ Ошибка в drawtext методе: {e}")
+            return False
+    
+    def parse_srt_content(self, srt_content: str) -> List[dict]:
+        """Парсит SRT контент в список словарей с временными метками"""
+        entries = []
+        blocks = srt_content.strip().split('\n\n')
+        
+        for block in blocks:
+            lines = block.strip().split('\n')
+            if len(lines) >= 3:
+                try:
+                    # Парсим строку времени (например: 00:00:01,500 --> 00:00:05,000)
+                    time_line = lines[1]
+                    if ' --> ' in time_line:
+                        start_str, end_str = time_line.split(' --> ')
+                        start_sec = self.srt_time_to_seconds(start_str.strip())
+                        end_sec = self.srt_time_to_seconds(end_str.strip())
+                        
+                        # Объединяем текстовые строки
+                        text = ' '.join(lines[2:])
+                        
+                        entries.append({
+                            'start': start_sec,
+                            'end': end_sec,
+                            'text': text
+                        })
+                except Exception as e:
+                    print(f"    ⚠️ Ошибка парсинга блока: {e}")
+                    continue
+        
+        return entries
+    
+    def srt_time_to_seconds(self, time_str: str) -> float:
+        """Конвертирует время SRT (00:00:01,500) в секунды"""
+        try:
+            # Формат: HH:MM:SS,mmm
+            time_part, ms_part = time_str.split(',')
+            hours, minutes, seconds = map(int, time_part.split(':'))
+            milliseconds = int(ms_part)
+            
+            total_seconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
+            return total_seconds
+        except Exception:
+            return 0.0
+
     def add_subtitles_to_video(self, video_path: Path, srt_content: str, output_path: Path):
-        """Добавляет субтитры к видео"""
+        """Добавляет субтитры к видео - РАБОЧАЯ ВЕРСИЯ С ПРЯМЫМ ПУТЕМ К ШРИФТУ"""
+        if not srt_content.strip():
+            print("    ⚠️ Пустые субтитры, сохраняем видео без них")
+            import shutil
+            shutil.copy2(video_path, output_path)
+            return True
+        
         # Сохраняем субтитры во временный файл
         srt_path = output_path.parent / f"temp_{output_path.stem}.srt"
         
         try:
+            # Записываем SRT файл
             with open(srt_path, 'w', encoding='utf-8') as f:
                 f.write(srt_content)
             
-            # Проверяем что файл субтитров создался
+            print(f"    📝 Временный SRT файл создан: {srt_path.name}")
+            
+            # Проверяем что файл создался
             if not srt_path.exists():
                 print(f"    ❌ Не удалось создать файл субтитров")
                 return False
             
-            # Способ 1: Вшиваем субтитры прямо в видео (burned-in)
-            video_str = str(video_path)
-            output_str = str(output_path)
+            # Используем абсолютные пути
+            video_path_str = str(video_path.absolute())
+            output_path_str = str(output_path.absolute())
+            srt_path_str = str(srt_path.absolute()).replace('\\', '/')
             
-            # Используем простой фильтр subtitles без кавычек
-            srt_for_filter = str(srt_path).replace('\\', '/').replace(':', '\\:')
-            
+            # СПОСОБ 1: Используем subtitles фильтр с прямым путем к шрифту
             cmd1 = [
                 'ffmpeg',
-                '-i', video_str,
-                '-vf', f'subtitles={srt_for_filter}:force_style=FontName=Arial,FontSize=24,PrimaryColour=&Hffffff',
+                '-i', video_path_str,
+                '-vf', f"subtitles={srt_path_str}:fontfile=C\\:/Windows/Fonts/arial.ttf:fontsize=24:fontcolor=white:outline=1:outlinecolor=black",
                 '-c:a', 'copy',
-                output_str,
-                '-y'
+                '-y',
+                output_path_str
             ]
             
-            try:
-                result = subprocess.run(cmd1, check=True, capture_output=True, text=True)
-                print(f"    ✅ Субтитры вшиты в видео")
+            print(f"    🔧 Способ 1: Встраиваем субтитры с прямым путем к шрифту...")
+            print(f"    📄 Команда: ffmpeg -i {video_path.name} [subtitles+font] {output_path.name}")
+            
+            result1 = subprocess.run(cmd1, capture_output=True, text=True)
+            
+            if result1.returncode == 0:
+                print(f"    ✅ Субтитры успешно встроены!")
                 return True
-            except subprocess.CalledProcessError as e:
-                print(f"    ⚠️ Способ 1 не сработал, пробуем упрощенный вариант...")
+            else:
+                print(f"    ⚠️ Способ 1 не сработал, пробуем drawtext...")
                 
-                # Способ 2: Упрощенная команда без стилей
-                cmd2 = [
+                # СПОСОБ 2: Используем drawtext - парсим SRT и накладываем каждую строку
+                if self.add_subtitles_with_drawtext(video_path, srt_content, output_path):
+                    return True
+                
+                # СПОСОБ 3: Упрощенные субтитры без шрифта
+                cmd3 = [
                     'ffmpeg',
-                    '-i', video_str,
-                    '-vf', f'subtitles={srt_for_filter}',
+                    '-i', video_path_str,
+                    '-vf', f"subtitles={srt_path_str}",
                     '-c:a', 'copy',
-                    output_str,
-                    '-y'
+                    '-y',
+                    output_path_str
                 ]
                 
-                try:
-                    subprocess.run(cmd2, check=True, capture_output=True)
-                    print(f"    ✅ Субтитры вшиты (упрощенный вариант)")
+                print(f"    🔧 Способ 3: Простые субтитры без шрифта...")
+                result3 = subprocess.run(cmd3, capture_output=True, text=True)
+                
+                if result3.returncode == 0:
+                    print(f"    ✅ Субтитры встроены (простой вариант)")
                     return True
-                except subprocess.CalledProcessError as e2:
-                    print(f"    ⚠️ Способ 2 тоже не сработал, пробуем через ass файл...")
-                    
-                    # Способ 3: Конвертируем в ASS и используем его
-                    ass_path = srt_path.with_suffix('.ass')
-                    self.convert_srt_to_ass(srt_path, ass_path)
-                    
-                    if ass_path.exists():
-                        ass_for_filter = str(ass_path).replace('\\', '/').replace(':', '\\:')
-                        cmd3 = [
-                            'ffmpeg',
-                            '-i', video_str,
-                            '-vf', f'ass={ass_for_filter}',
-                            '-c:a', 'copy',
-                            output_str,
-                            '-y'
-                        ]
-                        
-                        try:
-                            subprocess.run(cmd3, check=True, capture_output=True)
-                            print(f"    ✅ Субтитры вшиты через ASS")
-                            ass_path.unlink()  # Удаляем временный ASS
-                            return True
-                        except subprocess.CalledProcessError as e3:
-                            print(f"    ❌ Все способы вшивания не сработали")
-                            if ass_path.exists():
-                                ass_path.unlink()
-                    
-                    # Последний способ: просто копируем видео и оставляем .srt рядом
-                    print(f"    📄 Сохраняем видео с отдельным .srt файлом")
+                else:
+                    print(f"    ❌ Все способы не сработали, сохраняем без субтитров")
                     import shutil
                     shutil.copy2(video_path, output_path)
-                    
-                    # Переименовываем .srt файл чтобы совпадал с видео
-                    final_srt_path = output_path.with_suffix('.srt')
-                    if final_srt_path.exists():
-                        final_srt_path.unlink()
-                    srt_path.rename(final_srt_path)
-                    
-                    print(f"    📝 Субтитры в отдельном файле: {final_srt_path.name}")
                     return True
-            
+                
         except Exception as e:
-            print(f"    ❌ Ошибка при добавлении субтитров: {e}")
-            # В случае ошибки, копируем видео без субтитров
+            print(f"    ❌ Общая ошибка при обработке субтитров: {e}")
             try:
                 import shutil
                 shutil.copy2(video_path, output_path)
@@ -350,65 +502,12 @@ class VideoShortsProcessor:
                 print(f"    ❌ Ошибка при копировании видео: {copy_error}")
                 return False
         finally:
-            # Убираем временные файлы
-            for temp_file in [srt_path]:
-                if temp_file.exists():
-                    try:
-                        temp_file.unlink()
-                    except:
-                        pass
-    
-    def convert_srt_to_ass(self, srt_path: Path, ass_path: Path):
-        """Конвертирует SRT в ASS формат для лучшей совместимости"""
-        try:
-            with open(srt_path, 'r', encoding='utf-8') as f:
-                srt_content = f.read()
-            
-            # Простая конвертация SRT в ASS
-            ass_content = """[Script Info]
-Title: Auto-generated
-ScriptType: v4.00+
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,24,&Hffffff,&Hffffff,&H0,&H80000000,0,0,0,0,100,100,0,0,1,2,0,2,30,30,30,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-            
-            # Парсим SRT и конвертируем в ASS
-            blocks = srt_content.strip().split('\n\n')
-            for block in blocks:
-                lines = block.strip().split('\n')
-                if len(lines) >= 3:
-                    time_line = lines[1]
-                    text_lines = lines[2:]
-                    
-                    # Парсим время
-                    if ' --> ' in time_line:
-                        start, end = time_line.split(' --> ')
-                        start_ass = self.srt_time_to_ass(start)
-                        end_ass = self.srt_time_to_ass(end)
-                        text = '\\N'.join(text_lines)
-                        
-                        ass_content += f"Dialogue: 0,{start_ass},{end_ass},Default,,0,0,0,,{text}\n"
-            
-            with open(ass_path, 'w', encoding='utf-8') as f:
-                f.write(ass_content)
-                
-        except Exception as e:
-            print(f"    ⚠️ Ошибка конвертации в ASS: {e}")
-    
-    def srt_time_to_ass(self, srt_time: str) -> str:
-        """Конвертирует время из SRT формата в ASS"""
-        # SRT: 00:01:23,456 -> ASS: 0:01:23.46
-        srt_time = srt_time.strip()
-        if ',' in srt_time:
-            time_part, ms_part = srt_time.split(',')
-            ms_part = ms_part[:2]  # Берем только первые 2 цифры миллисекунд
-            return f"{time_part}.{ms_part}"
-        return srt_time
+            # Убираем временный SRT файл
+            if srt_path.exists():
+                try:
+                    srt_path.unlink()
+                except:
+                    pass
     
     def process_video(self, video_path: Path):
         """Обрабатывает одно видео"""
@@ -440,31 +539,26 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             
             # Извлекаем сегмент
             if self.extract_segment(video_path, start, end, temp_segment_path):
-                print(f"    ✅ Видео сегмент создан")
+                print(f"    ✅ Видео сегмент извлечен")
                 
                 if temp_segment_path.exists():
-                    # Генерируем субтитры
-                    if self.whisper_model:
-                        print(f"    🤖 Генерируем субтитры...")
-                        subtitles = self.generate_subtitles(temp_segment_path)
-                        
-                        if subtitles:
-                            print(f"    📝 Добавляем субтитры...")
-                            if self.add_subtitles_to_video(temp_segment_path, subtitles, final_segment_path):
-                                successful_segments += 1
-                            # Удаляем временный файл
-                            if temp_segment_path.exists():
-                                temp_segment_path.unlink()
-                        else:
-                            # Сохраняем без субтитров
-                            temp_segment_path.rename(final_segment_path)
-                            print(f"    ✅ {segment_name} готов без субтитров")
-                            successful_segments += 1
-                    else:
-                        # Сохраняем без субтитров
-                        temp_segment_path.rename(final_segment_path)
-                        print(f"    ✅ {segment_name} готов")
+                    # ВРЕМЕННО ОТКЛЮЧЕНЫ СУБТИТРЫ - только мобильная конвертация
+                    print(f"    📱 Создаем мобильную версию...")
+                    
+                    if self.convert_to_mobile_format(temp_segment_path, final_segment_path):
+                        print(f"    ✅ {segment_name} готов (мобильная версия)!")
                         successful_segments += 1
+                    else:
+                        # Если мобильная версия не создалась, оставляем оригинальную
+                        temp_segment_path.rename(final_segment_path)
+                        print(f"    ✅ {segment_name} готов (оригинальная версия)")
+                        successful_segments += 1
+                    
+                    # Удаляем временный файл
+                    if temp_segment_path.exists():
+                        temp_segment_path.unlink()
+                else:
+                    print(f"    ❌ Временный файл сегмента не найден")
             else:
                 print(f"    ❌ Не удалось создать сегмент {i}")
         
@@ -477,11 +571,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         # Проверяем наличие FFmpeg
         try:
-            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, text=True)
             print("✅ FFmpeg найден")
+            # Показываем версию для диагностики
+            version_line = result.stdout.split('\n')[0] if result.stdout else "версия неизвестна"
+            print(f"   📋 {version_line}")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("❌ FFmpeg не найден! Установите FFmpeg и добавьте в PATH")
-            print("   Инструкции: https://ffmpeg.org/download.html")
+            print("   💡 Для корректной работы субтитров нужна полная версия FFmpeg")
+            print("   🔗 Инструкции: https://ffmpeg.org/download.html")
             return
         
         # Проверяем наличие видеофайлов
@@ -509,7 +607,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         print(f"\n⚙️ Настройки:")
         print(f"   🕐 Минимальная длительность сегмента: {self.min_duration} сек")
         print(f"   🕘 Максимальная длительность сегмента: {self.max_duration} сек")
-        print(f"   📝 Субтитры: {'включены' if self.whisper_model else 'отключены'}")
+        print(f"   📝 Субтитры: {'✅ включены (Whisper)' if self.whisper_model else '❌ отключены'}")
         
         # Обрабатываем каждое видео
         total_processed = 0
