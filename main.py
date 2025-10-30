@@ -13,14 +13,14 @@ import numpy as np
 
 # Используем рабочий импорт
 from moviepy import VideoFileClip
-print("✅ moviepy импортирован успешно")
+print("moviepy импортирован успешно")
 
 # Пробуем импорт whisper
 try:
     import whisper
-    print("✅ whisper импортирован успешно")
+    print("whisper импортирован успешно")
 except ImportError:
-    print("⚠️ whisper не найден, субтитры будут отключены")
+    print("whisper не найден, субтитры будут отключены")
     whisper = None
 
 class VideoShortsProcessor:
@@ -41,18 +41,18 @@ class VideoShortsProcessor:
         self.input_folder.mkdir(exist_ok=True)
         self.output_folder.mkdir(exist_ok=True)
         
-        print(f"📁 Папка для видео: {self.input_folder}")
-        print(f"📁 Папка для шортсов: {self.output_folder}")
+        print(f"Папка для видео: {self.input_folder}")
+        print(f"Папка для шортсов: {self.output_folder}")
         
         # Загружаем модель Whisper для субтитров
-        print("🤖 Модель Whisper отключена для быстрого тестирования...")
+        print("Модель Whisper отключена для быстрого тестирования...")
         self.whisper_model = None  # ВРЕМЕННО ОТКЛЮЧЕНО
         # try:
         #     self.whisper_model = whisper.load_model("base")
-        #     print("✅ Модель Whisper загружена")
+        #     print("Модель Whisper загружена")
         # except Exception as e:
-        #     print(f"⚠️ Ошибка загрузки Whisper: {e}")
-        #     print("📝 Субтитры будут отключены")
+        #     print(f"Ошибка загрузки Whisper: {e}")
+        #     print("Субтитры будут отключены")
         #     self.whisper_model = None
         
         # Поддерживаемые форматы видео
@@ -97,7 +97,7 @@ class VideoShortsProcessor:
             
             return sorted(scene_times)
         except Exception as e:
-            print(f"⚠️ Ошибка при определении сцен: {e}")
+            print(f"Ошибка при определении сцен: {e}")
             return []
     
     def detect_silence_pauses(self, video_path: Path, silence_threshold: float = -30) -> List[float]:
@@ -130,7 +130,7 @@ class VideoShortsProcessor:
             
             return sorted(silence_times)
         except Exception as e:
-            print(f"⚠️ Ошибка при определении пауз: {e}")
+            print(f"Ошибка при определении пауз: {e}")
             return []
     
     def get_optimal_cut_points(self, video_path: Path) -> List[Tuple[float, float]]:
@@ -138,24 +138,24 @@ class VideoShortsProcessor:
         Определяет оптимальные точки нарезки на основе сцен и пауз
         Возвращает список кортежей (начало, конец) в секундах
         """
-        print("  🔍 Анализируем видео для поиска логических точек разреза...")
+        print("   Анализируем видео для поиска логических точек разреза...")
         
         # Получаем длительность видео
         try:
             with VideoFileClip(str(video_path)) as clip:
                 duration = clip.duration
         except Exception as e:
-            print(f"  ❌ Ошибка при получении длительности видео: {e}")
+            print(f"  Ошибка при получении длительности видео: {e}")
             return []
         
-        print(f"  📏 Длительность видео: {duration:.1f} секунд")
+        print(f"  Длительность видео: {duration:.1f} секунд")
         
         # Получаем точки смены сцен и пауз
         scene_changes = self.detect_scene_changes(video_path)
         silence_pauses = self.detect_silence_pauses(video_path)
         
-        print(f"  🎬 Найдено смен сцен: {len(scene_changes)}")
-        print(f"  🔇 Найдено пауз: {len(silence_pauses)}")
+        print(f"  Найдено смен сцен: {len(scene_changes)}")
+        print(f"  Найдено пауз: {len(silence_pauses)}")
         
         # Объединяем и сортируем все потенциальные точки разреза
         all_cuts = sorted(set(scene_changes + silence_pauses + [0, duration]))
@@ -211,7 +211,7 @@ class VideoShortsProcessor:
             subprocess.run(cmd, check=True, capture_output=True)
             return True
         except subprocess.CalledProcessError as e:
-            print(f"    ❌ Ошибка при создании сегмента: {e}")
+            print(f"    Ошибка при создании сегмента: {e}")
             return False
     
     def generate_subtitles(self, video_path: Path) -> str:
@@ -233,7 +233,7 @@ class VideoShortsProcessor:
             
             return srt_content
         except Exception as e:
-            print(f"    ⚠️ Ошибка при генерации субтитров: {e}")
+            print(f"    Ошибка при генерации субтитров: {e}")
             return ""
     
     def seconds_to_srt_time(self, seconds: float) -> str:
@@ -253,8 +253,8 @@ class VideoShortsProcessor:
                 original_height = clip.h
                 original_ratio = original_width / original_height
             
-            print(f"    📱 Конвертируем в мобильный формат...")
-            print(f"    📏 Исходное разрешение: {original_width}x{original_height} ({original_ratio:.2f}:1)")
+            print(f"     Конвертируем в мобильный формат...")
+            print(f"     Исходное разрешение: {original_width}x{original_height} ({original_ratio:.2f}:1)")
             
             # Целевое разрешение для мобильного (9:16)
             target_width = 1080
@@ -277,8 +277,8 @@ class VideoShortsProcessor:
             # Центрируем фон по горизонтали
             bg_x = (target_width - bg_scale_width) // 2
             
-            print(f"    🎯 Основное видео: {main_scale_width}x{main_scale_height} в позиции ({main_x}, {main_y})")
-            print(f"    🌫️ Размытый фон: {bg_scale_width}x{bg_scale_height} в позиции ({bg_x}, 0)")
+            print(f"     Основное видео: {main_scale_width}x{main_scale_height} в позиции ({main_x}, {main_y})")
+            print(f"     Размытый фон: {bg_scale_width}x{bg_scale_height} в позиции ({bg_x}, 0)")
             
             # Создаем сложный фильтр:
             # [0:v] - исходное видео
@@ -290,7 +290,7 @@ class VideoShortsProcessor:
                 f"[bg][main]overlay={main_x}:{main_y}"
             )
             
-            print(f"    🔧 Применяем фильтр размытого фона...")
+            print(f"     Применяем фильтр размытого фона...")
             
             # Выполняем конвертацию
             cmd = [
@@ -305,19 +305,19 @@ class VideoShortsProcessor:
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
-                print(f"    ✅ Мобильная версия создана с размытым фоном!")
+                print(f"     Мобильная версия создана с размытым фоном!")
                 return True
             else:
-                print(f"    ❌ Ошибка конвертации в мобильный формат:")
+                print(f"     Ошибка конвертации в мобильный формат:")
                 if result.stderr:
                     error_lines = result.stderr.strip().split('\n')[-2:]
                     for line in error_lines:
                         if line.strip():
-                            print(f"    ⚠️ {line}")
+                            print(f"     {line}")
                 return False
                 
         except Exception as e:
-            print(f"    ❌ Ошибка при конвертации в мобильный формат: {e}")
+            print(f"     Ошибка при конвертации в мобильный формат: {e}")
             return False
 
     def add_subtitles_with_drawtext(self, video_path: Path, srt_content: str, output_path: Path):
@@ -327,10 +327,10 @@ class VideoShortsProcessor:
             subtitle_entries = self.parse_srt_content(srt_content)
             
             if not subtitle_entries:
-                print("    ⚠️ Не удалось распарсить субтитры для drawtext")
+                print("     Не удалось распарсить субтитры для drawtext")
                 return False
             
-            print(f"    🎯 Используем drawtext для {len(subtitle_entries)} фрагментов субтитров")
+            print(f"     Используем drawtext для {len(subtitle_entries)} фрагментов субтитров")
             
             # Создаем фильтр drawtext для каждого субтитра
             drawtext_filters = []
@@ -359,18 +359,18 @@ class VideoShortsProcessor:
                 output_path_str
             ]
             
-            print(f"    🔧 Способ 2: Используем drawtext...")
+            print(f"     Способ 2: Используем drawtext...")
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
-                print(f"    ✅ Субтитры встроены через drawtext!")
+                print(f"     Субтитры встроены через drawtext!")
                 return True
             else:
-                print(f"    ❌ Drawtext тоже не сработал")
+                print(f"     Drawtext тоже не сработал")
                 return False
                 
         except Exception as e:
-            print(f"    ❌ Ошибка в drawtext методе: {e}")
+            print(f"     Ошибка в drawtext методе: {e}")
             return False
     
     def parse_srt_content(self, srt_content: str) -> List[dict]:
@@ -398,7 +398,7 @@ class VideoShortsProcessor:
                             'text': text
                         })
                 except Exception as e:
-                    print(f"    ⚠️ Ошибка парсинга блока: {e}")
+                    print(f"     Ошибка парсинга блока: {e}")
                     continue
         
         return entries
@@ -419,7 +419,7 @@ class VideoShortsProcessor:
     def add_subtitles_to_video(self, video_path: Path, srt_content: str, output_path: Path):
         """Добавляет субтитры к видео - РАБОЧАЯ ВЕРСИЯ С ПРЯМЫМ ПУТЕМ К ШРИФТУ"""
         if not srt_content.strip():
-            print("    ⚠️ Пустые субтитры, сохраняем видео без них")
+            print("     Пустые субтитры, сохраняем видео без них")
             import shutil
             shutil.copy2(video_path, output_path)
             return True
@@ -432,11 +432,11 @@ class VideoShortsProcessor:
             with open(srt_path, 'w', encoding='utf-8') as f:
                 f.write(srt_content)
             
-            print(f"    📝 Временный SRT файл создан: {srt_path.name}")
+            print(f"     Временный SRT файл создан: {srt_path.name}")
             
             # Проверяем что файл создался
             if not srt_path.exists():
-                print(f"    ❌ Не удалось создать файл субтитров")
+                print(f"     Не удалось создать файл субтитров")
                 return False
             
             # Используем абсолютные пути
@@ -483,23 +483,23 @@ class VideoShortsProcessor:
                 result3 = subprocess.run(cmd3, capture_output=True, text=True)
                 
                 if result3.returncode == 0:
-                    print(f"    ✅ Субтитры встроены (простой вариант)")
+                    print(f"    Субтитры встроены (простой вариант)")
                     return True
                 else:
-                    print(f"    ❌ Все способы не сработали, сохраняем без субтитров")
+                    print(f"    Все способы не сработали, сохраняем без субтитров")
                     import shutil
                     shutil.copy2(video_path, output_path)
                     return True
                 
         except Exception as e:
-            print(f"    ❌ Общая ошибка при обработке субтитров: {e}")
+            print(f"    Общая ошибка при обработке субтитров: {e}")
             try:
                 import shutil
                 shutil.copy2(video_path, output_path)
-                print(f"    📄 Видео сохранено без субтитров")
+                print(f"    Видео сохранено без субтитров")
                 return True
             except Exception as copy_error:
-                print(f"    ❌ Ошибка при копировании видео: {copy_error}")
+                print(f"    Ошибка при копировании видео: {copy_error}")
                 return False
         finally:
             # Убираем временный SRT файл
@@ -511,16 +511,16 @@ class VideoShortsProcessor:
     
     def process_video(self, video_path: Path):
         """Обрабатывает одно видео"""
-        print(f"\n🎬 Обработка: {video_path.name}")
+        print(f"\n Обработка: {video_path.name}")
         
         # Получаем точки нарезки
         segments = self.get_optimal_cut_points(video_path)
         
         if not segments:
-            print("  ❌ Не удалось найти подходящие сегменты")
+            print("  Не удалось найти подходящие сегменты")
             return
         
-        print(f"  ✅ Найдено {len(segments)} логических сегментов")
+        print(f"  Найдено {len(segments)} логических сегментов")
         
         # Создаем папку для этого видео
         video_output_folder = self.output_folder / video_path.stem
@@ -535,59 +535,59 @@ class VideoShortsProcessor:
             temp_segment_path = video_output_folder / f"temp_{segment_name}"
             final_segment_path = video_output_folder / segment_name
             
-            print(f"    📹 Сегмент {i}/{len(segments)}: {start:.1f}s - {end:.1f}s ({duration:.1f}s)")
+            print(f"    Сегмент {i}/{len(segments)}: {start:.1f}s - {end:.1f}s ({duration:.1f}s)")
             
             # Извлекаем сегмент
             if self.extract_segment(video_path, start, end, temp_segment_path):
-                print(f"    ✅ Видео сегмент извлечен")
+                print(f"    Видео сегмент извлечен")
                 
                 if temp_segment_path.exists():
                     # ВРЕМЕННО ОТКЛЮЧЕНЫ СУБТИТРЫ - только мобильная конвертация
-                    print(f"    📱 Создаем мобильную версию...")
+                    print(f"    Создаем мобильную версию...")
                     
                     if self.convert_to_mobile_format(temp_segment_path, final_segment_path):
-                        print(f"    ✅ {segment_name} готов (мобильная версия)!")
+                        print(f"    {segment_name} готов (мобильная версия)!")
                         successful_segments += 1
                     else:
                         # Если мобильная версия не создалась, оставляем оригинальную
                         temp_segment_path.rename(final_segment_path)
-                        print(f"    ✅ {segment_name} готов (оригинальная версия)")
+                        print(f"    {segment_name} готов (оригинальная версия)")
                         successful_segments += 1
                     
                     # Удаляем временный файл
                     if temp_segment_path.exists():
                         temp_segment_path.unlink()
                 else:
-                    print(f"    ❌ Временный файл сегмента не найден")
+                    print(f"    Временный файл сегмента не найден")
             else:
-                print(f"    ❌ Не удалось создать сегмент {i}")
+                print(f"    Не удалось создать сегмент {i}")
         
-        print(f"  🎯 Успешно создано сегментов: {successful_segments}/{len(segments)}")
+        print(f"  Успешно создано сегментов: {successful_segments}/{len(segments)}")
     
     def run(self):
         """Основной метод запуска обработки"""
-        print("🚀 Запуск автоматического процессора видео для шортсов")
+        print("Запуск автоматического процессора видео для шортсов")
         print("=" * 60)
         
         # Проверяем наличие FFmpeg
         try:
             result = subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, text=True)
-            print("✅ FFmpeg найден")
+            print("FFmpeg найден")
             # Показываем версию для диагностики
             version_line = result.stdout.split('\n')[0] if result.stdout else "версия неизвестна"
-            print(f"   📋 {version_line}")
+            print(f"    {version_line}")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            print("❌ FFmpeg не найден! Установите FFmpeg и добавьте в PATH")
-            print("   💡 Для корректной работы субтитров нужна полная версия FFmpeg")
-            print("   🔗 Инструкции: https://ffmpeg.org/download.html")
+            print(" FFmpeg не найден! Установите FFmpeg и добавьте в PATH")
+            print("    Для корректной работы субтитров нужна полная версия FFmpeg")
+            print("    Инструкции: https://ffmpeg.org/download.html")
             return
         
         # Проверяем наличие видеофайлов
         video_files = self.find_video_files()
         
         if not video_files:
-            print(f"📂 Видеофайлы не найдены в папке: {self.input_folder}")
-            print("💡 Поместите видеофайлы в папку 'input_videos' и запустите скрипт снова")
+            print(f" Видеофайлы не найдены в папке: {self.input_folder}")
+            print(" Поместите видеофайлы в папку 'input_videos' и запустите скрипт снова")
             
             # Создаем примерный файл с инструкцией
             instruction_file = self.input_folder / "ПОМЕСТИТЕ_СЮДА_ВИДЕО.txt"
@@ -600,14 +600,14 @@ class VideoShortsProcessor:
             
             return
         
-        print(f"📁 Найдено видеофайлов: {len(video_files)}")
+        print(f" Найдено видеофайлов: {len(video_files)}")
         for video in video_files:
-            print(f"  📄 {video.name}")
+            print(f"   {video.name}")
         
-        print(f"\n⚙️ Настройки:")
-        print(f"   🕐 Минимальная длительность сегмента: {self.min_duration} сек")
-        print(f"   🕘 Максимальная длительность сегмента: {self.max_duration} сек")
-        print(f"   📝 Субтитры: {'✅ включены (Whisper)' if self.whisper_model else '❌ отключены'}")
+        print(f"\n Настройки:")
+        print(f"    Минимальная длительность сегмента: {self.min_duration} сек")
+        print(f"    Максимальная длительность сегмента: {self.max_duration} сек")
+        print(f"    Субтитры: {' включены (Whisper)' if self.whisper_model else ' отключены'}")
         
         # Обрабатываем каждое видео
         total_processed = 0
@@ -616,14 +616,14 @@ class VideoShortsProcessor:
                 self.process_video(video_path)
                 total_processed += 1
             except Exception as e:
-                print(f"❌ Ошибка при обработке {video_path.name}: {e}")
+                print(f" Ошибка при обработке {video_path.name}: {e}")
                 continue
         
         print("\n" + "=" * 60)
-        print(f"🎉 Обработка завершена!")
-        print(f"📊 Обработано видео: {total_processed}/{len(video_files)}")
-        print(f"📁 Результаты сохранены в: {self.output_folder}")
-        print("\n💡 Готовые шортсы можно найти в папке 'output_shorts'")
+        print(f" Обработка завершена!")
+        print(f" Обработано видео: {total_processed}/{len(video_files)}")
+        print(f" Результаты сохранены в: {self.output_folder}")
+        print("\n Готовые шортсы можно найти в папке 'output_shorts'")
 
 
 def main():
