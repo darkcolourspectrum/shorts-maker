@@ -1,6 +1,12 @@
-openai-whisper==20231117
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+openai-whisper
 moviepy==1.0.3
 numpy>=1.21.0
 ffmpeg-python==0.2.0
 pathlib2==2.3.7
-argparse
+python-dotenv
+aiofiles
