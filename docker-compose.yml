@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  # Локальный Telegram Bot API для файлов до 2GB
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: "25313411"
+      TELEGRAM_API_HASH: "6ce030b058e4a747c2d624d5448a9045"
+      TELEGRAM_VERBOSITY: 2
+      TELEGRAM_MAX_WEBHOOK_CONNECTIONS: 40
+    ports:
+      - "8081:8081"
+    volumes:
+      - tg-bot-api-data:/var/lib/telegram-bot-api
+
+  # Основное API приложение
   shorts-maker-api:
     build: .
     ports:
@@ -12,22 +28,32 @@ services:
       - DEBUG=true
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      - USE_DATABASE=false
       - UPLOAD_PATH=/app/storage/input
       - OUTPUT_PATH=/app/storage/output
       - TEMP_PATH=/app/storage/temp
+      - MAX_FILE_SIZE=2000000000
+      - BOT_TOKEN=7718723631:AAHapgiCxXnyugZT_s1kH7_b19eqlDDYhTs
+      - LOCAL_BOT_API_URL=http://telegram-bot-api:8081
+      - EXTERNAL_BASE_URL=http://localhost:8000
+      - TELEGRAM_API_ID=25313411
+      - TELEGRAM_API_HASH=6ce030b058e4a747c2d624d5448a9045
+      - MIN_DURATION_DEFAULT=30
+      - MAX_DURATION_DEFAULT=120
+      - MOBILE_SCALE_DEFAULT=1.2
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=shorts_maker
       - DB_USER=shorts_user
       - DB_PASSWORD=shorts_password_2024
-      - DB_POOL_SIZE=10
-      - DB_MAX_OVERFLOW=20
     depends_on:
       - postgres
     restart: unless-stopped
 
+  # PostgreSQL
   postgres:
     image: postgres:15-alpine
+    container_name: postgres
     environment:
       - POSTGRES_DB=shorts_maker
       - POSTGRES_USER=shorts_user
@@ -40,19 +66,8 @@ services:
       - "5432:5432"
     restart: unless-stopped
 
-  telegram-bot-api:
-    image: aiogram/telegram-bot-api:latest
-    container_name: telegram-bot-api
-    restart: unless-stopped
-    environment:
-      TELEGRAM_API_ID: "${TELEGRAM_API_ID}"
-      TELEGRAM_API_HASH: "${TELEGRAM_API_HASH}"
-    ports:
-      - "8081:8081"
-    volumes:
-      - tg-bot-api-data:/var/lib/telegram-bot-api
-
 volumes:
   postgres_data:
     driver: local
   tg-bot-api-data:
+    driver: local
