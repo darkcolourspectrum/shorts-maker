@@ -1,8 +1,9 @@
 """
 API роуты для обработки видео
 """
+import time
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends, Form
 from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional
@@ -52,11 +53,11 @@ def validate_file(file: UploadFile) -> None:
 async def process_video(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    algorithm: str = "multi_shorts",
-    min_duration: int = 60,
-    max_duration: int = 180,
-    enable_subtitles: bool = False,
-    mobile_scale_factor: float = 1.2
+    algorithm: str = Form("multi_shorts"),
+    min_duration: int = Form(60),
+    max_duration: int = Form(180), 
+    enable_subtitles: bool = Form(False),
+    mobile_scale_factor: float = Form(1.2)
 ):
     """
     Загружает видео и запускает обработку
@@ -86,14 +87,22 @@ async def process_video(
             mobile_scale_factor=mobile_scale_factor
         )
         
-        # Создаем задачу
-        task_id = video_service.create_processing_task(file.filename, request_params)
+        # Сохраняем загруженный файл СНАЧАЛА
+        filename_safe = f"{int(time.time())}_{file.filename}"
+        upload_path = settings.upload_path_obj / filename_safe
         
-        # Сохраняем загруженный файл
-        upload_path = settings.upload_path_obj / file.filename
         async with aiofiles.open(upload_path, 'wb') as f:
             content = await file.read()
             await f.write(content)
+        
+        # Создаем задачу (ПОСЛЕ сохранения файла)
+        task_id = video_service.create_processing_task(
+            filename=file.filename,
+            file_path=upload_path,
+            request_params=request_params,
+            ip_address=None,  # Пока не используем
+            user_agent=None   # Пока не используем
+        )
         
         # Запускаем обработку в фоне
         background_tasks.add_task(
@@ -232,6 +241,21 @@ async def health_check():
         "upload_path": str(settings.upload_path_obj),
         "output_path": str(settings.output_path_obj),
         "temp_path": str(settings.temp_path_obj)
+    }
+
+
+@router.get("/stats")
+async def get_processing_stats():
+    """
+    Возвращает статистику обработки задач
+    
+    Returns:
+        dict: Статистика по задачам
+    """
+    stats = await video_service.get_stats()
+    return {
+        "stats": stats,
+        "message": "Статистика обработки задач"
     }
 
 

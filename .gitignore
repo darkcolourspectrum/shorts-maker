@@ -1,6 +1,7 @@
 # Папки с видеоматериалами (игнорируем из-за размера файлов)
 input_videos/
 output_shorts/
+storage
 
 # Python
 __pycache__/
@@ -32,6 +33,7 @@ ENV/
 env.bak/
 venv.bak/
 .env
+scripts/
 
 # IDE
 .vscode/
@@ -56,3 +58,4 @@ Thumbs.db
 
 #project init
 init.ps1
+

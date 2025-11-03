@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     temp_path: str = "./storage/temp"
     
     # Настройки файлов
-    max_file_size: int = 500000000  # 500MB
+    max_file_size: int = 1000000000  # 500MB
     
     # Настройки обработки по умолчанию (из оригинального скрипта)
     min_duration_default: int = 60

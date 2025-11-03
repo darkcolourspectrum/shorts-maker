@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  shorts-maker-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    environment:
+      - DEBUG=true
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - UPLOAD_PATH=/app/storage/input
+      - OUTPUT_PATH=/app/storage/output
+      - TEMP_PATH=/app/storage/temp
+      # Database settings
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=shorts_maker
+      - DB_USER=shorts_user
+      - DB_PASSWORD=shorts_password_2024
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=20
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=shorts_maker
+      - POSTGRES_USER=shorts_user
+      - POSTGRES_PASSWORD=shorts_password_2024
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shorts_user -d shorts_maker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local

@@ -26,6 +26,9 @@ async def lifespan(app: FastAPI):
     settings.output_path_obj.mkdir(parents=True, exist_ok=True)
     settings.temp_path_obj.mkdir(parents=True, exist_ok=True)
     
+    # БД ОТКЛЮЧЕНА ДЛЯ ТЕСТИРОВАНИЯ
+    print("База данных отключена - используем JSON файлы")
+    
     # Проверяем FFmpeg
     from app.core.video_processor import VideoProcessor
     processor = VideoProcessor()
