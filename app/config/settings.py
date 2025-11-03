@@ -1,6 +1,5 @@
 """
-Настройки приложения
-Перенесено из оригинального скрипта main.py
+Настройки приложения с поддержкой БД
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
@@ -27,9 +26,25 @@ class Settings(BaseSettings):
     temp_path: str = "./storage/temp"
     
     # Настройки файлов
-    max_file_size: int = 1000000000  # 500MB
+    max_file_size: int = 1000000000  # 1GB
     
-    # Настройки обработки по умолчанию (из оригинального скрипта)
+    # База данных
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_name: str = "shorts_maker"
+    db_user: str = "shorts_user"
+    db_password: str = "shorts_password_2024"
+    
+    # Настройки пула соединений
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_timeout: int = 30
+    db_pool_recycle: int = 3600
+    
+    # Режим работы БД
+    use_database: bool = True  # False для работы без БД (JSON файлы)
+    
+    # Настройки обработки по умолчанию
     min_duration_default: int = 60
     max_duration_default: int = 180
     enable_subtitles_default: bool = False
@@ -38,14 +53,14 @@ class Settings(BaseSettings):
     # Whisper настройки
     whisper_model: str = "base"
     
-    # Настройки для анализа (из оригинального скрипта)
+    # Настройки для анализа
     scene_detection_threshold: float = 0.3
     silence_threshold_db: float = -30.0
     silence_duration_seconds: float = 1.0
     
     @property
     def allowed_extensions(self) -> List[str]:
-        """Возвращает список поддерживаемых расширений (как в оригинальном скрипте)"""
+        """Возвращает список поддерживаемых расширений"""
         return [".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v"]
     
     @property
@@ -71,8 +86,18 @@ class Settings(BaseSettings):
     
     @property
     def video_extensions(self) -> set:
-        """Возвращает set поддерживаемых расширений (как в оригинальном скрипте)"""
+        """Возвращает set поддерживаемых расширений"""
         return {ext.lower() for ext in self.allowed_extensions}
+    
+    @property
+    def database_url(self) -> str:
+        """Синхронный URL для миграций"""
+        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+    
+    @property
+    def async_database_url(self) -> str:
+        """Асинхронный URL для работы приложения"""
+        return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 
 # Глобальный экземпляр настроек

@@ -15,7 +15,6 @@ services:
       - UPLOAD_PATH=/app/storage/input
       - OUTPUT_PATH=/app/storage/output
       - TEMP_PATH=/app/storage/temp
-      # Database settings
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=shorts_maker
@@ -26,12 +25,6 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   postgres:
     image: postgres:15-alpine
@@ -46,12 +39,20 @@ services:
     ports:
       - "5432:5432"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shorts_user -d shorts_maker"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: "${TELEGRAM_API_ID}"
+      TELEGRAM_API_HASH: "${TELEGRAM_API_HASH}"
+    ports:
+      - "8081:8081"
+    volumes:
+      - tg-bot-api-data:/var/lib/telegram-bot-api
 
 volumes:
   postgres_data:
     driver: local
+  tg-bot-api-data:

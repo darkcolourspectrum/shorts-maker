@@ -26,8 +26,21 @@ async def lifespan(app: FastAPI):
     settings.output_path_obj.mkdir(parents=True, exist_ok=True)
     settings.temp_path_obj.mkdir(parents=True, exist_ok=True)
     
-    # БД ОТКЛЮЧЕНА ДЛЯ ТЕСТИРОВАНИЯ
-    print("База данных отключена - используем JSON файлы")
+    # Инициализация БД (если включена)
+    if settings.use_database:
+        try:
+            from app.database.database import init_database
+            await init_database()
+            print("База данных инициализирована")
+        except ImportError:
+            print("ПРЕДУПРЕЖДЕНИЕ: Модули БД недоступны, переключаемся на JSON режим")
+            settings.use_database = False
+        except Exception as e:
+            print(f"ОШИБКА при инициализации БД: {e}")
+            print("Переключаемся на JSON режим")
+            settings.use_database = False
+    else:
+        print("База данных отключена - используем JSON файлы")
     
     # Проверяем FFmpeg
     from app.core.video_processor import VideoProcessor
@@ -45,6 +58,14 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     print("Завершение работы Shorts Maker API...")
+    
+    if settings.use_database:
+        try:
+            from app.database.database import close_database
+            await close_database()
+            print("Соединения с БД закрыты")
+        except:
+            pass
 
 
 # Создаем FastAPI приложение
@@ -98,6 +119,7 @@ async def root():
         "service": "Shorts Maker API",
         "version": "1.0.0",
         "description": "API для автоматической нарезки видео на шортсы",
+        "storage_mode": "database" if settings.use_database else "json_files",
         "endpoints": {
             "process": "/api/v1/process",
             "status": "/api/v1/status/{task_id}",

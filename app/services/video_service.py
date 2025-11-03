@@ -41,16 +41,6 @@ class TaskManager:
                    **kwargs) -> Dict[str, Any]:
         """
         Создает новую задачу в JSON файле
-        
-        Args:
-            task_id: Уникальный ID задачи
-            filename: Оригинальное имя файла
-            file_path: Путь к сохраненному файлу
-            algorithm: Алгоритм обработки
-            **kwargs: Дополнительные параметры
-            
-        Returns:
-            Dict с данными созданной задачи
         """
         task_data = {
             'task_id': task_id,
@@ -79,12 +69,6 @@ class TaskManager:
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """
         Получает статус задачи из JSON файла
-        
-        Args:
-            task_id: ID задачи
-            
-        Returns:
-            Dict со статусом задачи или None
         """
         task_file = self._get_task_file(task_id)
         
@@ -109,16 +93,6 @@ class TaskManager:
                           processing_time: Optional[float] = None):
         """
         Обновляет статус задачи в JSON файле
-        
-        Args:
-            task_id: ID задачи
-            status: Новый статус
-            progress: Прогресс (0-100)
-            message: Сообщение о статусе
-            result_files: Список готовых файлов
-            error_message: Сообщение об ошибке
-            segments_created: Количество созданных сегментов
-            processing_time: Время обработки в секундах
         """
         task_data = self.get_task_status(task_id)
         
@@ -149,6 +123,12 @@ class TaskManager:
         with open(task_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f, ensure_ascii=False, indent=2)
 
+    def cleanup_task_files(self, task_id: str):
+        """Очищает файлы задачи"""
+        task_file = self._get_task_file(task_id)
+        if task_file.exists():
+            task_file.unlink()
+
 
 class VideoService:
     """
@@ -167,22 +147,12 @@ class VideoService:
                               ip_address: Optional[str] = None,
                               user_agent: Optional[str] = None) -> str:
         """
-        Создает задачу обработки видео (синхронная версия)
-        
-        Args:
-            filename: Имя загруженного файла
-            file_path: Путь к сохраненному файлу
-            request_params: Параметры обработки
-            ip_address: IP адрес пользователя
-            user_agent: User-Agent пользователя
-            
-        Returns:
-            str: ID созданной задачи
+        Создает задачу обработки видео (СИНХРОННАЯ версия - ИСПРАВЛЕНО!)
         """
         # Генерируем уникальный ID задачи
         task_id = f"task_{int(time.time())}_{uuid.uuid4().hex[:8]}"
         
-        # Создаем задачу в JSON файле
+        # ИСПРАВЛЕНО: создаем задачу СИНХРОННО, убрал asyncio.run()
         self.task_manager.create_task(
             task_id=task_id,
             filename=filename,
@@ -200,14 +170,9 @@ class VideoService:
     
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """
-        Получает статус задачи
-        
-        Args:
-            task_id: ID задачи
-            
-        Returns:
-            Dict со статусом задачи или None
+        Получает статус задачи (СИНХРОННАЯ версия - ИСПРАВЛЕНО!)
         """
+        # ИСПРАВЛЕНО: вызываем синхронно, убрал asyncio.run()
         return self.task_manager.get_task_status(task_id)
     
     async def process_video_async(self, 
@@ -216,14 +181,6 @@ class VideoService:
                                  request_params: ProcessingRequest) -> Dict[str, Any]:
         """
         Асинхронно обрабатывает видео с обновлением статуса
-        
-        Args:
-            video_path: Путь к видеофайлу
-            task_id: ID задачи
-            request_params: Параметры обработки
-            
-        Returns:
-            Dict с результатами обработки
         """
         start_time = time.time()
         
@@ -331,16 +288,6 @@ class VideoService:
                            task_id: str) -> Dict[str, Any]:
         """
         Синхронная обработка видео
-        
-        Args:
-            video_path: Путь к видеофайлу
-            output_folder: Папка для результатов
-            algorithm: Алгоритм обработки
-            algorithm_params: Параметры алгоритма
-            task_id: ID задачи для логирования
-            
-        Returns:
-            Dict с результатами обработки
         """
         try:
             print(f"Начинаем обработку видео для задачи {task_id}")
@@ -368,14 +315,8 @@ class VideoService:
     def start_processing(self, task_id: str, video_path: Path, request_params: ProcessingRequest):
         """
         Запускает асинхронную обработку видео в фоне
-        
-        Args:
-            task_id: ID задачи
-            video_path: Путь к видеофайлу
-            request_params: Параметры обработки
         """
         # Используем правильный способ запуска асинхронной функции в background task
-        import asyncio
         try:
             # Пытаемся получить текущий event loop
             loop = asyncio.get_event_loop()
@@ -384,6 +325,21 @@ class VideoService:
         except RuntimeError:
             # Если нет event loop, создаем новый
             asyncio.run(self.process_video_async(video_path, task_id, request_params))
+
+    async def get_stats(self) -> Dict[str, Any]:
+        """Получает статистику"""
+        # Простая статистика из JSON файлов
+        tasks_folder = settings.temp_path_obj / "tasks"
+        total_tasks = len(list(tasks_folder.glob("*.json")))
+        
+        return {
+            'total_tasks': total_tasks,
+            'storage_mode': 'json_files',
+            'completed_tasks': 0,
+            'failed_tasks': 0,
+            'processing_tasks': 0,
+            'queued_tasks': 0
+        }
 
 
 # Глобальный экземпляр сервиса

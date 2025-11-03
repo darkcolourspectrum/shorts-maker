@@ -3,7 +3,7 @@ uvicorn[standard]
 python-multipart
 pydantic
 pydantic-settings
-openai-whisper
+#openai-whisper
 moviepy==1.0.3
 numpy>=1.21.0
 ffmpeg-python==0.2.0
@@ -16,3 +16,8 @@ sqlalchemy[asyncio]>=2.0.0
 alembic>=1.13.0
 psycopg2-binary>=2.9.0
 asyncpg
+
+# Bot
+aiogram
+aiohttp
+aiofiles
