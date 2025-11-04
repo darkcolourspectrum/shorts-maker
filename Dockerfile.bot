@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Установка зависимостей
+RUN pip install --no-cache-dir \
+    aiogram \
+    aiohttp \
+    aiofiles \
+    python-dotenv
+
+# Копирование кода бота
+COPY app/telegram-bot /app/telegram-bot
+COPY app/config /app/config
+
+# Создание папок
+RUN mkdir -p /app/storage/temp/bot_downloads
+
+# Переменные окружения
+ENV PYTHONUNBUFFERED=1
+ENV BOT_TOKEN=""
+ENV API_BASE_URL="http://shorts-maker-api:8000"
+ENV LOCAL_BOT_API_URL="http://telegram-bot-api:8081"
+
+CMD ["python", "/app/telegram-bot/bot.py"]
