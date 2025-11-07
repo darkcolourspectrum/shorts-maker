@@ -1,5 +1,5 @@
 """
-Telegram бот для Shorts Maker - PRODUCTION VERSION
+Telegram бот для Shorts Maker - ИСПРАВЛЕННАЯ ВЕРСИЯ
 Корректная работа с локальным Bot API для файлов до 2GB
 """
 import asyncio
@@ -73,7 +73,6 @@ async def create_bot() -> Tuple[Bot, bool]:
             api_server = TelegramAPIServer.from_base(LOCAL_BOT_API_URL)
             
             # Создаем сессию БЕЗ параметра timeout - aiogram сам управляет таймаутами
-            # Таймауты будут установлены на уровне aiohttp при скачивании файлов
             session = AiohttpSession(api=api_server)
             
             # Создаем бота с кастомной сессией
@@ -96,7 +95,7 @@ async def create_bot() -> Tuple[Bot, bool]:
 
 
 async def download_file_from_bot_api(file_path: str, destination: Path, bot_token: str) -> bool:
-    """Прямое скачивание файла с локального Bot API"""
+    """Прямое скачивание файла с локального Bot API - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     max_retries = 3
     
     for attempt in range(max_retries):
@@ -108,24 +107,44 @@ async def download_file_from_bot_api(file_path: str, destination: Path, bot_toke
                 sock_read=600    # 10 минут на чтение
             )
             
-            # ВАЖНО: Убираем лишние части пути
-            # file_path может быть как "videos/file_0.mp4" так и полный путь
-            # Нужно извлечь только относительную часть
-            if file_path.startswith('/var/lib/telegram-bot-api/'):
-                # Убираем префикс и токен из пути
-                parts = file_path.split('/')
-                # Ищем videos/photos/documents/etc и берем оттуда
-                for i, part in enumerate(parts):
-                    if part in ['videos', 'photos', 'documents', 'video_notes', 'voice', 'animations', 'audio']:
-                        file_path = '/'.join(parts[i:])
-                        break
+            # ИСПРАВЛЕНО: Правильная обработка пути
+            # Локальный Bot API возвращает путь вида:
+            # /var/lib/telegram-bot-api/TOKEN/videos/file_X.mp4
+            # Нужно правильно извлечь относительный путь
             
-            # Убираем начальный слеш если есть
-            file_path = file_path.lstrip('/')
+            clean_path = file_path
+            logger.info(f"Original file_path from Telegram: {file_path}")
+            
+            # Убираем префикс /var/lib/telegram-bot-api/ если есть
+            if clean_path.startswith('/var/lib/telegram-bot-api/'):
+                clean_path = clean_path.replace('/var/lib/telegram-bot-api/', '', 1)
+            
+            # Теперь clean_path выглядит как: TOKEN/videos/file_X.mp4
+            # Нужно убрать TOKEN из начала, оставив только videos/file_X.mp4
+            
+            # Проверяем, начинается ли путь с токена (может быть с двоеточием или без)
+            token_parts = bot_token.split(':')
+            if len(token_parts) == 2:
+                token_id = token_parts[0]
+                # Ищем и убираем токен из пути
+                if clean_path.startswith(f"{bot_token}/"):
+                    clean_path = clean_path.replace(f"{bot_token}/", '', 1)
+                elif clean_path.startswith(f"{token_id}:"):
+                    # Находим первый слеш после токена
+                    first_slash = clean_path.find('/')
+                    if first_slash > 0:
+                        clean_path = clean_path[first_slash + 1:]
+            
+            # Убираем начальный слеш если остался
+            clean_path = clean_path.lstrip('/')
             
             # Формируем правильный URL
-            url = f"{LOCAL_BOT_API_URL}/file/bot{bot_token}/{file_path}"
-            logger.info(f"Downloading from: {url} (attempt {attempt + 1}/{max_retries})")
+            # Локальный Bot API ожидает: /file/botTOKEN/относительный_путь
+            url = f"{LOCAL_BOT_API_URL}/file/bot{bot_token}/{clean_path}"
+            
+            logger.info(f"Cleaned path: {clean_path}")
+            logger.info(f"Final URL: {url}")
+            logger.info(f"Download attempt {attempt + 1}/{max_retries}")
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as resp:
@@ -169,13 +188,13 @@ async def download_file_from_bot_api(file_path: str, destination: Path, bot_toke
                             logger.warning(f"Size mismatch: expected {total_size}, got {actual_size}")
                             if attempt < max_retries - 1:
                                 destination.unlink(missing_ok=True)
-                                await asyncio.sleep(5 * (attempt + 1))  # Увеличиваем задержку
+                                await asyncio.sleep(5 * (attempt + 1))
                                 continue
                         
                         return True
                     else:
                         error_text = await resp.text()
-                        logger.error(f"HTTP {resp.status}: {error_text[:200]}")
+                        logger.error(f"HTTP {resp.status}: {error_text[:500]}")
                         
         except asyncio.TimeoutError:
             logger.error(f"Timeout on attempt {attempt + 1}")
@@ -205,22 +224,22 @@ async def download_file(bot: Bot, file_id: str, destination: Path, using_local_a
         logger.info(f"File info: path={file_info.file_path}, size={file_size_mb:.1f}MB")
         
         if using_local_api:
-            # Для локального API используем прямое скачивание
-            logger.info("Using direct download from local Bot API")
-            success = await download_file_from_bot_api(file_info.file_path, destination, BOT_TOKEN)
-            
-            # Если не получилось, пробуем через стандартный метод бота
-            if not success:
-                logger.info("Direct download failed, trying bot.download_file method")
+            # СПОСОБ 1: Прямой доступ к файлу через общий volume
+            direct_path = Path(file_info.file_path)
+            if direct_path.exists() and direct_path.is_file():
+                logger.info(f"Using DIRECT file access (shared volume)")
                 try:
-                    await bot.download_file(file_info.file_path, destination)
+                    import shutil
+                    shutil.copy2(direct_path, destination)
                     actual_size_mb = destination.stat().st_size / (1024 * 1024)
-                    logger.info(f"Downloaded via bot.download_file: {actual_size_mb:.1f}MB")
+                    logger.info(f"File copied directly: {actual_size_mb:.1f}MB")
                     return True
                 except Exception as e:
-                    logger.error(f"bot.download_file also failed: {e}")
-                    return False
+                    logger.warning(f"Direct copy failed: {e}, trying HTTP download")
             
+            # СПОСОБ 2: HTTP скачивание через Bot API
+            logger.info("Using HTTP download from local Bot API")
+            success = await download_file_from_bot_api(file_info.file_path, destination, BOT_TOKEN)
             return success
         else:
             # Для стандартного API используем встроенный метод
@@ -245,8 +264,9 @@ async def send_to_api(file_path: Path, params: dict) -> Optional[str]:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             data = aiohttp.FormData()
             
-            with open(file_path, 'rb') as f:
-                data.add_field('file', f, filename=file_path.name)
+            # ИСПРАВЛЕНО: читаем файл в память, не держим открытым
+            file_content = file_path.read_bytes()
+            data.add_field('file', file_content, filename=file_path.name)
             
             for key, value in params.items():
                 data.add_field(key, str(value))
@@ -276,7 +296,7 @@ async def monitor_task(task_id: str, message: Message) -> dict:
     error_count = 0
     max_errors = 3
     
-    for attempt in range(120):  # 10 минут максимум
+    for attempt in range(720):  # 60 минут максимум (720 * 5 сек)
         try:
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -284,7 +304,7 @@ async def monitor_task(task_id: str, message: Message) -> dict:
                 async with session.get(url) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        error_count = 0  # Сбрасываем счетчик ошибок
+                        error_count = 0
                     else:
                         error_count += 1
                         if error_count >= max_errors:
@@ -316,33 +336,33 @@ async def monitor_task(task_id: str, message: Message) -> dict:
             try:
                 if status == 'processing':
                     await message.edit_text(
-                        f"🔄 Обрабатываю видео...\n"
-                        f"📊 Прогресс: {progress}%\n"
-                        f"📝 {message_text}\n"
-                        f"⏱️ Время: {elapsed_min}:{elapsed_sec:02d}"
+                        f"Обрабатываю видео...\n"
+                        f"Прогресс: {progress}%\n"
+                        f"{message_text}\n"
+                        f"Время: {elapsed_min}:{elapsed_sec:02d}"
                     )
                 elif status == 'completed':
                     segments = data.get('segments_created', 0)
                     await message.edit_text(
-                        f"✅ Обработка завершена!\n"
-                        f"📹 Создано сегментов: {segments}\n"
-                        f"⏱️ Время: {elapsed_min}:{elapsed_sec:02d}"
+                        f"Обработка завершена!\n"
+                        f"Создано сегментов: {segments}\n"
+                        f"Время: {elapsed_min}:{elapsed_sec:02d}"
                     )
                     return data
                     
                 elif status == 'error':
                     error_msg = data.get('error_message', 'Неизвестная ошибка')
                     await message.edit_text(
-                        f"❌ Ошибка обработки:\n{error_msg}\n"
-                        f"⏱️ Время: {elapsed_min}:{elapsed_sec:02d}"
+                        f"Ошибка обработки:\n{error_msg}\n"
+                        f"Время: {elapsed_min}:{elapsed_sec:02d}"
                     )
                     return data
             except Exception:
-                pass  # Игнорируем ошибки обновления сообщения
+                pass
         
         await asyncio.sleep(5)
     
-    await message.edit_text("⏰ Превышено время ожидания обработки (10 минут)")
+    await message.edit_text("Превышено время ожидания обработки (60 минут)")
     return {"status": "timeout"}
 
 
@@ -354,7 +374,7 @@ async def main():
     for i in range(30):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{API_BASE_URL}/api/v1/health", timeout=5) as resp:
+                async with session.get(f"{API_BASE_URL}/api/v1/health", timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         logger.info("Main API is ready")
                         break
@@ -375,12 +395,12 @@ async def main():
     @dp.message(Command("start", "help"))
     async def cmd_start(message: Message, state: FSMContext):
         await message.answer(
-            f"🎬 Привет! Я бот для создания шортсов из видео.\n\n"
-            f"📊 Текущие настройки:\n"
-            f"• Максимальный размер файла: {max_size_str}\n"
-            f"• API: {'локальный (большие файлы)' if using_local_api else 'стандартный'}\n"
-            f"• Формат результата: мобильные шортсы 9:16\n\n"
-            f"📤 Просто отправьте мне видеофайл!"
+            f"Привет! Я бот для создания шортсов из видео.\n\n"
+            f"Текущие настройки:\n"
+            f"- Максимальный размер файла: {max_size_str}\n"
+            f"- API: {'локальный (большие файлы)' if using_local_api else 'стандартный'}\n"
+            f"- Формат результата: мобильные шортсы 9:16\n\n"
+            f"Просто отправьте мне видеофайл!"
         )
         await state.set_state(VideoProcessing.waiting_for_video)
     
@@ -391,16 +411,16 @@ async def main():
         # Проверяем основной API
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{API_BASE_URL}/api/v1/health", timeout=5) as resp:
-                    statuses['main_api'] = '✅ работает' if resp.status == 200 else f'❌ ошибка {resp.status}'
+                async with session.get(f"{API_BASE_URL}/api/v1/health", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    statuses['main_api'] = 'работает' if resp.status == 200 else f'ошибка {resp.status}'
         except:
-            statuses['main_api'] = '❌ недоступен'
+            statuses['main_api'] = 'недоступен'
         
         # Проверяем Bot API
-        statuses['bot_api'] = '✅ работает (2GB)' if using_local_api else '⚠️ стандартный (50MB)'
+        statuses['bot_api'] = 'работает (2GB)' if using_local_api else 'стандартный (50MB)'
         
         await message.answer(
-            f"📊 Статус системы:\n\n"
+            f"Статус системы:\n\n"
             f"Основной API: {statuses['main_api']}\n"
             f"Bot API: {statuses['bot_api']}\n"
             f"Макс. размер: {max_size_str}"
@@ -413,14 +433,14 @@ async def main():
     @dp.message(F.document, VideoProcessing.waiting_for_video)
     async def handle_document(message: Message, state: FSMContext):
         if not message.document.file_name:
-            await message.answer("❌ Не удалось определить тип файла")
+            await message.answer("Не удалось определить тип файла")
             return
             
         ext = Path(message.document.file_name).suffix.lower()
         video_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v'}
         
         if ext not in video_extensions:
-            await message.answer(f"❌ Неподдерживаемый формат: {ext}\nПоддерживаются: {', '.join(video_extensions)}")
+            await message.answer(f"Неподдерживаемый формат: {ext}\nПоддерживаются: {', '.join(video_extensions)}")
             return
             
         await process_media_file(message, state, message.document, "document")
@@ -437,15 +457,15 @@ async def main():
         # Проверяем размер
         if file_size > max_file_size:
             await message.answer(
-                f"❌ Файл слишком большой: {file_size_mb:.1f}MB\n"
-                f"📊 Максимальный размер: {max_size_str}"
+                f"Файл слишком большой: {file_size_mb:.1f}MB\n"
+                f"Максимальный размер: {max_size_str}"
             )
             await state.set_state(VideoProcessing.waiting_for_video)
             return
         
         status_msg = await message.answer(
-            f"📥 Скачиваю видео ({file_size_mb:.1f}MB)...\n"
-            f"⏳ Это может занять некоторое время."
+            f"Скачиваю видео ({file_size_mb:.1f}MB)...\n"
+            f"Это может занять некоторое время."
         )
         
         # Генерируем имя файла
@@ -459,8 +479,8 @@ async def main():
         
         if not success:
             await status_msg.edit_text(
-                f"❌ Ошибка при скачивании файла.\n"
-                f"💡 Попробуйте файл меньшего размера или повторите позже."
+                f"Ошибка при скачивании файла.\n"
+                f"Попробуйте файл меньшего размера или повторите позже."
             )
             await state.set_state(VideoProcessing.waiting_for_video)
             return
@@ -469,8 +489,8 @@ async def main():
         speed_mb = actual_size_mb / download_time if download_time > 0 else 0
         
         await status_msg.edit_text(
-            f"✅ Файл скачан ({actual_size_mb:.1f}MB за {download_time:.1f}с, {speed_mb:.1f}MB/s)\n"
-            f"🚀 Отправляю на обработку..."
+            f"Файл скачан ({actual_size_mb:.1f}MB за {download_time:.1f}с, {speed_mb:.1f}MB/s)\n"
+            f"Отправляю на обработку..."
         )
         
         # Отправляем в API
@@ -485,30 +505,30 @@ async def main():
         task_id = await send_to_api(video_path, params)
         
         if not task_id:
-            await status_msg.edit_text("❌ Ошибка при отправке в API. Попробуйте позже.")
+            await status_msg.edit_text("Ошибка при отправке в API. Попробуйте позже.")
             video_path.unlink(missing_ok=True)
             await state.set_state(VideoProcessing.waiting_for_video)
             return
         
         # Мониторим прогресс
-        await status_msg.edit_text(f"🔄 Обрабатываю видео...\n📋 Task ID: {task_id}")
+        await status_msg.edit_text(f"Обрабатываю видео...\nTask ID: {task_id}")
         result = await monitor_task(task_id, status_msg)
         
         if result.get('status') == 'completed':
             # Отправляем ссылку на результат
-            base_url = "http://localhost:8000" if not IS_DOCKER else API_BASE_URL
-            download_url = f"{base_url}/api/v1/telegram/download-zip/{task_id}"
+            # Для пользователя используем localhost (снаружи Docker)
+            download_url = f"http://localhost:8000/api/v1/telegram/download-zip/{task_id}"
             
             await message.answer(
-                f"🎉 Готово! Ваши шортсы готовы!\n\n"
-                f"📦 Скачать архив:\n{download_url}\n\n"
-                f"💡 Совет: откройте ссылку в браузере для скачивания"
+                f"Готово! Ваши шортсы готовы!\n\n"
+                f"Скачать архив:\n{download_url}\n\n"
+                f"Совет: откройте ссылку в браузере для скачивания"
             )
         elif result.get('status') == 'error':
             error_msg = result.get('error_message', 'Неизвестная ошибка')
-            await message.answer(f"❌ Ошибка обработки:\n{error_msg}")
+            await message.answer(f"Ошибка обработки:\n{error_msg}")
         else:
-            await message.answer("⏰ Превышено время ожидания обработки")
+            await message.answer("Превышено время ожидания обработки")
         
         # Очистка
         video_path.unlink(missing_ok=True)
@@ -516,7 +536,7 @@ async def main():
     
     @dp.message(VideoProcessing.waiting_for_video)
     async def handle_other_messages(message: Message):
-        await message.answer("📹 Отправьте видеофайл для обработки")
+        await message.answer("Отправьте видеофайл для обработки")
     
     logger.info(f"Bot ready! Max size: {max_size_str}")
     

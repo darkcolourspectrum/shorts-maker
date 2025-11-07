@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.api.routes.processing import router as processing_router
+from app.api.routes.telegram import router as telegram_router
 from app.config.settings import settings
 
 
@@ -108,6 +109,7 @@ app.add_middleware(
 
 # Подключаем роуты
 app.include_router(processing_router)
+app.include_router(telegram_router)
 
 
 @app.get("/")

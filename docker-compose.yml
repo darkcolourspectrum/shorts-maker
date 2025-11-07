@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Локальный Telegram Bot API для файлов до 2GB
   telegram-bot-api:
@@ -55,6 +53,8 @@ services:
     networks:
       - shorts-network
     restart: unless-stopped
+    depends_on:
+      - telegram-bot-api
 
   # Telegram Bot
   telegram-bot:
@@ -71,6 +71,7 @@ services:
     volumes:
       - ./storage:/app/storage
       - ./app/telegram-bot:/app/telegram-bot
+      - tg-bot-api-data:/var/lib/telegram-bot-api:ro
     networks:
       - shorts-network
     depends_on:
